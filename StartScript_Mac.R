@@ -30,7 +30,7 @@ writeNIfTI(mask,maskname)
 copename <- paste(scratchdir,"cope",sep="")
 writeNIfTI(cope,filename=copename)
 
-## Ground truth: FDR analysis with q=0.05
+## Ground truth: FWE analysis with control at level 0.05
 
 fsl_model_cmd = paste("randomise -i ",copename," -o output -1 --glm_output",sep="")
 system(fsl_model_cmd)
@@ -42,36 +42,68 @@ pmap <- 1-pt(tmap,nfull-1)
 pname <- paste(scratchdir,"pstat1",sep="")
 writeNIfTI(pmap,filename=pname)
 
-thresfile <- paste(scratchdir,"threshold.txt",sep="")
-fdr_cmd <- paste("fdr -i",pname,"-q 0.05 >",thresfile)
-system(fdr_cmd)
-
-fdr_threshold <- read.table(thresfile,skip=1)$V1
-
-# how many voxels are active?
-sign <- ifelse(pmap<fdr_threshold,1,0)
-sum(sign==1)
-
-# How many clusters? -> use cluster command
-
-# First: transform from t to z
-
-zmap<-qnorm(pt(tmap,nfull-1))
-
-fdr_threshold_t<-qt(1-fdr_threshold,nfull-1)
-fdr_threshold_z<-qnorm(pt(fdr_threshold_t,nfull-1))
-
 zname <- paste(scratchdir,"zmap",sep="")
+zmap<-qnorm(pt(tmap,nfull-1))
 writeNIfTI(zmap,zname)
+
+# smoothness op z-statistieken? -> geeft extreme estimates
 
 smoothfile <- paste(scratchdir,"smoothness.txt",sep="")
 system(paste("smoothest -z ",tname," -m ",maskname,">",smoothfile,sep=""))
 smooth <- read.table(smoothfile)
 vol <- smooth$V2[2]
 dlh <- smooth$V2[1]
+res <- smooth$V2[3]
 clusterfile <- paste(scratchdir,"clusterfile.txt",sep="")
-cl_cmd <- paste("cluster --in=",zname," --thresh=",fdr_threshold_z," -p ",1," -d ",dlh," -o cluster --volume=",vol," --olmax=peakfile.txt > ",clusterfile,sep="")
+
+RESELcount<-vol/res
+FWE_cmd<-paste("ptoz 0.05 -g ",RESELcount)
+
+FWEthresh<-as.numeric(system(FWE_cmd,intern=TRUE))
+
+# Code Joke -> komt niet helemaal overeen
+#Res<-RESELcount
+#Res<-sum(mask)/(5/2)**3
+#zs<-seq(1,15,0.0001)
+#pN_RFT<-Res*exp(-zs**2/2)*zs**2
+#cutoff_RFT<-min(zs[pN_RFT<0.05])
+
+
+# how many voxels are active?
+sign <- ifelse((zmap>FWEthresh),1,0)
+sum(sign==1)
+
+# How many clusters? -> use cluster command
+
+clusterfile <- paste(scratchdir,"clusterfile.txt",sep="")
+cl_cmd <- paste("cluster --in=",zname," --thresh=",FWEthresh," -p ",1," -d ",dlh," -o cluster --volume=",vol," --olmax=peakfile.txt --oindex=indexfile > ",clusterfile,sep="")
 system(cl_cmd)
 
 clusterresults <- read.table(clusterfile,skip=1)
 names(clusterresults) <- c("index","voxels","p","logp","max","x","y","z","cogx","cogy","cogz")
+
+indices<-paste(scratchdir,"indexfile.nii.gz",sep="")
+imap<-readNIfTI(indices)[,,]
+
+# Retain three largest clusters
+
+clust1<-clusterresults$index[1]
+clust2<-clusterresults$index[2]
+clust3<-clusterresults$index[3]
+
+maskc1<-imap==clust1
+maskc2<-imap==clust2
+maskc3<-imap==clust3
+
+csize1<-sum(maskc1)
+csize2<-sum(maskc2)
+csize3<-sum(maskc3)
+
+# effect sizes: using t or z? with z, infinity values arise
+
+es1<-mean(tmap[maskc1==1]/sqrt(nfull))
+es2<-mean(tmap[maskc2==1]/sqrt(nfull))
+es3<-mean(tmap[maskc3==1]/sqrt(nfull))
+
+
+#############
