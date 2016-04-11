@@ -4,25 +4,48 @@ library(prodlim)
 HOMEfolder <- "/Users/bmoerker/Documents/server/fMRI/Stanford/Softwarecode/"
 HPCfolder <- "/Users/bmoerker/Desktop/contrast/80_Unrelated_cope/"
 scratchdir <- "/Users/bmoerker/Documents/server/fMRI/Stanford/Softwarecode/Scratch/"
+resultsdir<-"/Users/bmoerker/Documents/server/fMRI/Stanford/Softwarecode/Results/"
 
 setwd(scratchdir)
 
-write(c("Iteration","Study","Peak","WPeak","Cluster","Significant","ESC","WESC"),paste(scratchdir,"results.txt",sep=""),ncolumns=7)
+write(c("Iteration","Study","Peak","WPeak","Cluster","Significant","ESC","WESC"),paste(resultsdir,"results.txt",sep=""),ncolumns=8)
 
 ## Reading in "full data" to create ground truth
 ## For now, 30 subjects as ground truth - sample from other 50 subjects
 
-nfull <- 30
+nfull<-30
+nclust<-3
+nsample<-12
+nsim<-3
+nstudy<-4
+ngroundtruth<-c(1:78)
+
+for(it in 1:nsim)
+{
+print(it)
+
+set.seed(it)
+permn1<-sample(ngroundtruth,length(ngroundtruth),replace=FALSE)
+gt<-permn1[1:nfull]
+permn<-permn1[(nfull+1):(nfull+nstudy*nsample)]
+
+study1<-permn[1:nsample]
+study2<-permn[(nsample+1):(2*nsample)]
+study3<-permn[(2*nsample+1):(3*nsample)]
+study4<-permn[(3*nsample+1):(4*nsample)]
+studies<-cbind(study1,study2,study3,study4)
+
+
 cope <- array(NA,dim=c(91,109,91,nfull))
 for (s in 1:nfull){
-copefile <- paste(HPCfolder,"subject_",s,"_contrast_1",sep="")
+copefile <- paste(HPCfolder,"subject_",gt[s],"_contrast_1",sep="")
 cope1 <- readNIfTI(copefile)[,,]
 cope[,,,s] <- cope1
 }
 
 ## Create mask before analyses
-## ? use also this mask for future analyses?
-## Is only used for command cluster, not for ground truth?
+## ? use also this mask for future analyses? - now rerun each time
+
 
 mask_subject <- ifelse(cope==0,0,1)
 mask_av <- apply(mask_subject,c(1,2,3),mean)
@@ -54,7 +77,7 @@ writeNIfTI(zmap,zname)
 rescope<- array(NA,dim=c(91,109,91,nfull))
 avcope<-apply(cope,c(1,2,3),mean)
 for(i in 1:nfull)
-{ print(i)
+{
   rescope[,,,i]<-cope[,,,i]-avcope}
   resname <- paste(scratchdir,"rescope",sep="")
   writeNIfTI(rescope,filename=resname)
@@ -91,45 +114,36 @@ imap<-readNIfTI(indices)[,,]
 
 # Retain three largest clusters
 
-clust1<-clusterresults$index[1]
-clust2<-clusterresults$index[2]
-clust3<-clusterresults$index[3]
-
-maskc1<-imap==clust1
-maskc2<-imap==clust2
-maskc3<-imap==clust3
-
-csize1<-sum(maskc1)
-csize2<-sum(maskc2)
-csize3<-sum(maskc3)
-
-# effect sizes: using t or z? with z, infinity values arise
-
-es1<-mean(tmap[maskc1==1]/sqrt(nfull))
-es2<-mean(tmap[maskc2==1]/sqrt(nfull))
-es3<-mean(tmap[maskc3==1]/sqrt(nfull))
-
-# weighted effect sizes, cfr. Cohen's d
-
-J1<-1-3/(4*(nfull-1)-1)
-
-wes1<-es1*J1
-wes2<-es2*J1
-wes3<-es3*J1
+# clust1<-clusterresults$index[1]
+# clust2<-clusterresults$index[2]
+# clust3<-clusterresults$index[3]
+#
+# maskc1<-imap==clust1
+# maskc2<-imap==clust2
+# maskc3<-imap==clust3
+#
+# csize1<-sum(maskc1)
+# csize2<-sum(maskc2)
+# csize3<-sum(maskc3)
+#
+# # effect sizes: using t or z? with z, infinity values arise
+#
+# es1<-mean(tmap[maskc1==1]/sqrt(nfull))
+# es2<-mean(tmap[maskc2==1]/sqrt(nfull))
+# es3<-mean(tmap[maskc3==1]/sqrt(nfull))
+#
+# # weighted effect sizes, cfr. Cohen's d
+#
+# J1<-1-3/(4*(nfull-1)-1)
+#
+# wes1<-es1*J1
+# wes2<-es2*J1
+# wes3<-es3*J1
 
 
 #############
 
-ngroundtruth<-c(31:78)
 
-permn<-sample(ngroundtruth,length(ngroundtruth),replace=FALSE)
-nsample<-12
-nstudy<-4
-study1<-permn[1:nsample]
-study2<-permn[(nsample+1):(2*nsample)]
-study3<-permn[(2*nsample+1):(3*nsample)]
-study4<-permn[(3*nsample+1):(4*nsample)]
-studies<-cbind(study1,study2,study3,study4)
 
 for(st in 1:nstudy)
 {
@@ -175,7 +189,7 @@ smooth <- read.table(smoothfile1)
 vol <- smooth$V2[2]
 dlh <- smooth$V2[1]
 clusterfile1 <- paste(scratchdir,"clusterfile1.txt",sep="")
-cl_cmd <- paste("cluster --in=",zname1," --thresh=",qnorm(1-0.001)," -p ",0.05," -d ",dlh," -o cluster --volume=",vol," --olmax=peakfiles1.txt --oindex=indexfiles1 > ",clusterfile1,sep="")
+cl_cmd <- paste("cluster --in=",zname1," --thresh=",qnorm(1-0.001)," -p ",0.01," -d ",dlh," -o cluster --volume=",vol," --olmax=peakfiles1.txt --oindex=indexfiles1 > ",clusterfile1,sep="")
 system(cl_cmd)
 
 
@@ -200,15 +214,18 @@ if(boolean==1)
 {
 peak<-peakmap[compc1+1]/sqrt(nsample)
 wpeak<-peak*(1-3/(4*(nsample-1)-1))
-tabres<-cbind(rep(st,length(a1)),peak,wpeak,rep(cl,length(a1)),rep(boolean,length(a1)),rep(es,length(a1)),rep(wes,length(a1)))
+tabres<-cbind(rep(it,length(a1)),rep(st,length(a1)),peak,wpeak,rep(cl,length(a1)),rep(boolean,length(a1)),rep(es,length(a1)),rep(wes,length(a1)))
 }
 if(boolean==0)
 {
 peak<-max(peakmap[maskc1==1])/sqrt(nsample)
 wpeak<-peak*(1-3/(4*(nsample-1)-1))
-tabres<-cbind(st,peak,wpeak,cl,boolean,es,wes)
+tabres<-cbind(it,st,peak,wpeak,cl,boolean,es,wes)
 }
-write.table(tabres,paste(scratchdir,"results.txt",sep=""),append=T,col.names=FALSE,row.names=FALSE)
+write.table(tabres,paste(resultsdir,"results.txt",sep=""),append=T,col.names=FALSE,row.names=FALSE)
+}
+
+
 }
 
 
