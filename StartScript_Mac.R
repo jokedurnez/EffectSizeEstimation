@@ -13,6 +13,82 @@ write(c("Iteration","Study","Peak","WPeak","Cluster","Significant","ESC","WESC")
 ## Reading in "full data" to create ground truth
 ## For now, 30 subjects as ground truth - sample from other 50 subjects
 
+#####################################################################
+## Identifying clusters using super-ground truth
+
+nindiv<-78
+
+cope <- array(NA,dim=c(91,109,91,nindiv))
+for (s in 1:nindiv){
+copefile <- paste(HPCfolder,"subject_",s,"_contrast_1",sep="")
+cope1 <- readNIfTI(copefile)[,,]
+cope[,,,s] <- cope1
+}
+
+mask_subject <- ifelse(cope==0,0,1)
+mask_av <- apply(mask_subject,c(1,2,3),mean)
+mask <- ifelse(mask_av==1,1,0)
+maskname <- paste(scratchdir,"mask",sep="")
+writeNIfTI(mask,maskname)
+
+copename <- paste(scratchdir,"cope",sep="")
+writeNIfTI(cope,filename=copename)
+
+fsl_model_cmd = paste("randomise -i ",copename," -o output -1 --glm_output",sep="")
+system(fsl_model_cmd)
+
+tname <- paste(scratchdir,"output_tstat1.nii.gz",sep="")
+tmap <- readNIfTI(tname)[,,]
+pmap <- 1-pt(tmap,nindiv-1)
+
+pname <- paste(scratchdir,"pstat1",sep="")
+writeNIfTI(pmap,filename=pname)
+
+zname <- paste(scratchdir,"zmap",sep="")
+zmap<-qnorm(pt(tmap,nindiv-1))
+writeNIfTI(zmap,zname)
+
+rescope<- array(NA,dim=c(91,109,91,nindiv))
+avcope<-apply(cope,c(1,2,3),mean)
+for(i in 1:nindiv)
+{rescope[,,,i]<-cope[,,,i]-avcope}
+  resname <- paste(scratchdir,"rescope",sep="")
+  writeNIfTI(rescope,filename=resname)
+
+df<-nindiv-1
+smoothfile <- paste(scratchdir,"smoothness.txt",sep="")
+system(paste("smoothest -d ",df," -m ",maskname," -r ",resname, ">",smoothfile,sep=""))
+smooth <- read.table(smoothfile)
+vol <- smooth$V2[2]
+dlh <- smooth$V2[1]
+res <- smooth$V2[3]
+
+RESELcount<-vol/res
+FWE_cmd<-paste("ptoz 0.05 -g ",RESELcount)
+FWEthresh<-as.numeric(system(FWE_cmd,intern=TRUE))
+
+sign <- ifelse((zmap>FWEthresh),1,0)
+
+clusterfile <- paste(scratchdir,"clusterfile.txt",sep="")
+cl_cmd <- paste("cluster --in=",zname," --thresh=",FWEthresh," -p ",1," -d ",dlh," -o cluster --volume=",vol," --olmax=peakfile.txt --oindex=indexfile > ",clusterfile,sep="")
+system(cl_cmd)
+
+clusterresults <- read.table(clusterfile,skip=1)
+names(clusterresults) <- c("index","voxels","p","logp","max","x","y","z","cogx","cogy","cogz")
+
+indices<-paste(scratchdir,"indexfile.nii.gz",sep="")
+
+imapSGT<-readNIfTI(indices)[,,]
+nclustSGT<-length(clusterresults$index)
+IndexSGT0<-clusterresults$index
+IndexSGT<-rev(clusterresults$index)
+
+
+#################
+
+
+
+
 nfull<-30
 nclust<-3
 nsample<-12
@@ -111,6 +187,21 @@ names(clusterresults) <- c("index","voxels","p","logp","max","x","y","z","cogx",
 
 indices<-paste(scratchdir,"indexfile.nii.gz",sep="")
 imap<-readNIfTI(indices)[,,]
+
+
+clustindicator<-vector("numeric",3)
+for(ell in 1:3)
+{a2<-vector("numeric",length(nclustSGT))
+clust<-clusterresults$index[ell]
+clust1<-imap==clust
+for(kell in 1:nclustSGT)
+{clust2<-imapSGT==IndexSGT0[kell]
+ a2[kell]<-sum(clust1&clust2)
+  }
+a1<-which(a2==max(a2))[1]
+clustindicator[ell]<-IndexSGT[a1]
+}
+
 
 # Retain three largest clusters
 
