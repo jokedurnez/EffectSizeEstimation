@@ -30,7 +30,7 @@ setwd(scratchdir)
 
 nfull<-101
 nclust<-4
-nsample<-20
+nsample<-10
 nsim<-3
 nstudy<-4
 ngroundtruth<-c(1:181)
@@ -111,8 +111,12 @@ names(clusterresults) <- c("index","voxels","p","logp","max","x","y","z","cogx",
 indices<-paste(scratchdir,"indexfile.nii.gz",sep="")
 imap<-readNIfTI(indices)[,,]
 
+xco<-read.table("peakfile.txt",skip=1)$V3
+yco<-read.table("peakfile.txt",skip=1)$V4
+zco<-read.table("peakfile.txt",skip=1)$V5
+
 peakresults<-read.table("peakfile.txt",skip=1)
-peakresults2<-cbind(rep(it,dim(peakresults)[1]),peakresults)
+peakresults2<-cbind(rep(it,dim(peakresults)[1]),peakresults,tmap[cbind(xco+1,yco+1,zco+1)])
 write.table(peakresults2,paste(resultsdir,"peakGT.txt",sep=""),append=T,col.names=FALSE,row.names=FALSE)
 
 for(st in 1:nstudy)
@@ -165,9 +169,16 @@ zcord<-read.table("peakfiles1.txt",skip=1)$V5
 peakmasks1 <- array(0,dim=c(91,109,91))
 peakmasks1[cbind(xcord+1,ycord+1,zcord+1)]<-1
 
+clusterindexStudy<-read.table(clusterfile1,skip=1)
+
+
+indicesStudy<-paste(scratchdir,"indexfiles1.nii.gz",sep="")
+imapStudy<-readNIfTI(indicesStudy)[,,]
+
 
 for(cl in 1:nclust)
-{maskc1<-imap==clusterresults$index[cl]
+{
+  maskc1<-imap==clusterresults$index[cl]
 compc1<-which(peakmasks1==1&maskc1==1,arr.ind=T)-1
 cord<-data.frame(cbind(xcord,ycord,zcord))
 a1<-row.match(data.frame(compc1),cord)
@@ -177,18 +188,24 @@ es<-mean(tmap[maskc1==1]/sqrt(nfull))
 wes<-es*(1-3/(4*(nfull-1)-1))
 if(boolean==1)
 {
+clind<-read.table("peakfiles1.txt",skip=1)$V1[a1]
+maskSt<-array(0,dim=c(91,109,91))
+for(tel in 1:length(unique(clind)))
+{maskSt[imapStudy==clind]<-1}
+doorsnede<-which(maskSt==1&maskc1==1,arr.ind=T)
+pes<-mean(tmap[doorsnede]/sqrt(nfull))
 peakt<-peakmap[compc1+1]
 peak<-peakmap[compc1+1]/sqrt(nsample)
 wpeak<-peak*(1-3/(4*(nsample-1)-1))
-tabres<-cbind(rep(it,length(a1)),rep(st,length(a1)),peakt,peak,wpeak,rep(cl,length(a1)),rep(boolean,length(a1)),rep(es,length(a1)),rep(wes,length(a1)),xcord[a1],ycord[a1],zcord[a1])
+tabres<-cbind(rep(it,length(a1)),rep(st,length(a1)),peakt,peak,wpeak,rep(cl,length(a1)),rep(boolean,length(a1)),rep(es,length(a1)),rep(wes,length(a1)),rep(pes,length(a1)),xcord[a1],ycord[a1],zcord[a1])
 }
 if(boolean==0)
 {
 peak<-max(peakmap[maskc1==1])/sqrt(nsample)
 compmax<-which(peakmap==max(peakmap[maskc1==1]),arr.ind=T)
-
+pes<-es
 wpeak<-peak*(1-3/(4*(nsample-1)-1))
-tabres<-cbind(it,st,max(peakmap[maskc1==1]),peak,wpeak,cl,boolean,es,wes,compmax[1],compmax[2],compmax[3])
+tabres<-cbind(it,st,max(peakmap[maskc1==1]),peak,wpeak,cl,boolean,es,wes,pes,compmax[1],compmax[2],compmax[3])
 }
 write.table(tabres,paste(resultsdir,"results.txt",sep=""),append=T,col.names=FALSE,row.names=FALSE)
 }

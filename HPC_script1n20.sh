@@ -17,7 +17,7 @@ module load R
 mkdir /user/scratch/gent/vsc418/vsc41855/Tempresultsn20/
 mkdir /user/scratch/gent/vsc418/vsc41855/resultsn20/
 
-cd /user/home/gent/vsc418/vsc41855/HPC_test1
+cd /user/home/gent/vsc418/vsc41855/Effectsize_run1
 
 Rscript HPC_script_run_n20_Files.R
 
