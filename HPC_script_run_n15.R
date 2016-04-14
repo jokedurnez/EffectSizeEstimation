@@ -191,7 +191,7 @@ if(boolean==1)
 clind<-read.table("peakfiles1.txt",skip=1)$V1[a1]
 maskSt<-array(0,dim=c(91,109,91))
 for(tel in 1:length(unique(clind)))
-{maskSt[imapStudy==clind]<-1}
+{maskSt[imapStudy==clind[tel]]<-1}
 doorsnede<-which(maskSt==1&maskc1==1,arr.ind=T)
 pes<-mean(tmap[doorsnede]/sqrt(nfull))
 peakt<-peakmap[compc1+1]

@@ -110,6 +110,9 @@ names(clusterresults) <- c("index","voxels","p","logp","max","x","y","z","cogx",
 
 indices<-paste(scratchdir,"indexfile.nii.gz",sep="")
 imap<-readNIfTI(indices)[,,]
+imap2<-length(clusterresults$index)-imap+1
+SaveClustGT<-paste(resultsdir,"ClustIt",it,sep="")
+writeNIFTI(imap2,SaveClustGT)
 
 xco<-read.table("peakfile.txt",skip=1)$V3
 yco<-read.table("peakfile.txt",skip=1)$V4
@@ -191,7 +194,7 @@ if(boolean==1)
 clind<-read.table("peakfiles1.txt",skip=1)$V1[a1]
 maskSt<-array(0,dim=c(91,109,91))
 for(tel in 1:length(unique(clind)))
-{maskSt[imapStudy==clind]<-1}
+{maskSt[imapStudy==clind[tel]]<-1}
 doorsnede<-which(maskSt==1&maskc1==1,arr.ind=T)
 pes<-mean(tmap[doorsnede]/sqrt(nfull))
 peakt<-peakmap[compc1+1]
